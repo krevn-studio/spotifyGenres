@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Krevn Genres — i tuoi brani Spotify divisi per genere</title>
+<meta name="description" content="Strumento open source di Krevn Studio: analizza i tuoi brani Spotify e li divide in cartelle per genere. Nessun server, nessun dato salvato.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0b0d;--card:#141418;--line:#26262c;--fg:#eee;--mut:#9a9aa3;--acc:#1ed760}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Inter,system-ui,sans-serif}
+main{max-width:820px;margin:0 auto;padding:48px 20px 80px}
+.brand{color:var(--mut);font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(32px,7vw,52px);line-height:1.05;margin:8px 0 12px;font-weight:800}
+h1 span{color:var(--acc)}
+h2{font-size:20px;margin:0 0 8px}
+.lead{color:var(--mut);font-size:18px;margin:0 0 28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:14px 0}
+.tabs{display:flex;gap:8px;margin-bottom:6px}
+.tab{background:none;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:8px 16px;font:600 14px Inter,sans-serif;cursor:pointer}
+.tab.on{background:var(--acc);color:#000;border-color:var(--acc)}
+button.pri{background:var(--acc);color:#000;border:0;border-radius:99px;padding:10px 20px;font:600 15px Inter,sans-serif;cursor:pointer}
+button.pri:disabled{opacity:.5;cursor:default}
+button.sec{background:none;color:var(--fg);border:1px solid var(--line);border-radius:99px;padding:6px 14px;font:600 13px Inter,sans-serif;cursor:pointer}
+input[type=text]{width:100%;background:#0e0e11;border:1px solid var(--line);border-radius:10px;color:var(--fg);padding:12px;font:15px ui-monospace,monospace;margin:8px 0 12px}
+ol.steps{padding-left:20px;color:var(--mut);margin:8px 0 16px}
+ol.steps b{color:var(--fg)}
+code{background:#222;border-radius:4px;padding:1px 6px;font-size:13px;word-break:break-all}
+.copy{cursor:pointer;border-bottom:1px dashed var(--mut)}
+.status{color:var(--mut);font-size:14px;margin-top:10px;min-height:22px}
+.bar{height:4px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+details.f{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:10px 0}
+details.f summary{cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;list-style:none}
+details.f summary::-webkit-details-marker{display:none}
+.tracks{list-style:none;padding:0;margin:10px 0 0}
+.tracks li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.tracks li span{color:var(--mut)}
+.tracks select{background:#0e0e11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px;font-size:12px;max-width:140px}
+.note{color:var(--mut);font-size:14px;border-left:2px solid var(--line);padding-left:14px;margin-top:24px}
+.hidden{display:none}
+footer{margin-top:48px;color:var(--mut);font-size:13px}
+a{color:var(--acc)}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">Krevn Studio · open source</div>
+  <h1>I tuoi brani,<br><span>divisi per genere.</span></h1>
+  <p class="lead">Analizza i tuoi brani preferiti e li raggruppa in cartelle per genere. Tutto gira nel tuo browser: nessun server, nessun dato salvato. Chiudi la pagina e sparisce tutto.</p>
+
+  <section id="start">
+    <div class="tabs">
+      <button class="tab on" data-tab="spotify">Login Spotify</button>
+      <button class="tab" data-tab="export">Carica export</button>
+    </div>
+
+    <div class="card" id="tab-spotify">
+      <h2>Accedi con la tua app Spotify</h2>
+      <p class="lead" style="font-size:15px;margin:0">Spotify concede l'accesso alle API solo tramite app personali. Crearne una è gratis e richiede 2 minuti. Serve un account Premium.</p>
+      <ol class="steps">
+        <li>Apri <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> e premi <b>Create app</b>.</li>
+        <li>Nome e descrizione a piacere. In <b>Redirect URI</b> incolla: <code class="copy" id="redir" title="Clicca per copiare"></code></li>
+        <li>In <b>Which API/SDKs</b> spunta <b>Web API</b>, accetta i termini e salva.</li>
+        <li>Copia il <b>Client ID</b> dalla pagina dell'app e incollalo qui sotto.</li>
+      </ol>
+      <input type="text" id="cid" placeholder="Client ID" autocomplete="off" spellcheck="false">
+      <button class="pri" id="login">Accedi con Spotify</button>
+    </div>
+
+    <div class="card hidden" id="tab-export">
+      <h2>Carica i tuoi dati Spotify</h2>
+      <p class="lead" style="font-size:15px;margin:0">Funziona anche senza Premium. I generi arrivano da MusicBrainz.</p>
+      <ol class="steps">
+        <li>Vai su <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a> e richiedi i tuoi dati (cronologia di ascolto). Spotify li invia via email, di solito in pochi giorni.</li>
+        <li>Estrai lo zip e seleziona i file <code>StreamingHistory_music_*.json</code> o <code>Streaming_History_Audio_*.json</code>.</li>
+      </ol>
+      <input type="file" id="files" accept=".json,application/json" multiple>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="bar"><i id="prog"></i></div>
+  </section>
+
+  <section id="result" class="hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2 id="summary" style="margin:0"></h2>
+      <button class="sec" id="restart">Ricomincia</button>
+    </div>
+    <div id="folders"></div>
+  </section>
+
+  <p class="note">Codice aperto: leggilo prima di usarlo. Il Client ID e i token restano in memoria solo durante la sessione. Il Client ID passa da <code>sessionStorage</code> per il tempo del redirect di login e viene cancellato subito dopo.</p>
+  <footer>Fatto da Krevn Studio · <a href="https://github.com/xAspired/krevn-genres">GitHub</a> · <a href="https://buymeacoffee.com/xaspired">Offrimi un caffè</a></footer>
+</main>
+
+<script>
+(() => {
+  // ===== Macro-cartelle: keyword cercate nei generi (Spotify o MusicBrainz). Vince la prima che corrisponde. =====
+  const BUCKETS = [
+    ['Rap & Emo', ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'grime', 'emo', 'alt z', 'alternative pop', 'dark pop']],
+    ['Rock & Metal', ['rock', 'metal', 'punk', 'grunge', 'hardcore', 'post-hardcore']],
+    ['Indie & Alt', ['indie', 'alternative', 'shoegaze', 'bedroom', 'dream']],
+    ['Pop', ['pop']],
+    ['Elettronica', ['edm', 'house', 'techno', 'electro', 'dubstep', 'drum and bass', 'trance', 'synth', 'phonk', 'electronic']],
+    ['R&B & Soul', ['r&b', 'rnb', 'soul', 'funk']],
+    ['Italiana', ['italian', 'cantautor']],
+    ['Latin', ['reggaeton', 'latin', 'urbano']],
+    ['Chill & Classica', ['ambient', 'classical', 'piano', 'soundtrack', 'jazz', 'lofi', 'lo-fi']],
+  ];
+  const FALLBACK = 'Altro';
+  const SCOPES = 'user-top-read user-library-read playlist-modify-private';
+  const LIKED_MAX = 500;
+  const MB_MAX_ARTISTS = 200;
+
+  const $ = (s) => document.querySelector(s);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const REDIRECT = location.origin + location.pathname;
+  const status = (t) => { $('#status').textContent = t; };
+  const progress = (p) => { $('#prog').style.width = Math.round(p * 100) + '%'; };
+
+  let token = null;
+  let tracks = [];      // {name, artist, artistId?, uri?}
+  let folders = new Map();
+  const ss = { get(k) { try { return sessionStorage.getItem(k); } catch { return null; } },
+               set(k, v) { try { sessionStorage.setItem(k, v); } catch {} },
+               del(k) { try { sessionStorage.removeItem(k); } catch {} } };
+
+  // ===== UI base =====
+  $('#redir').textContent = REDIRECT;
+  $('#redir').onclick = async () => { try { await navigator.clipboard.writeText(REDIRECT); status('Redirect URI copiato.'); } catch {} };
+  document.querySelectorAll('.tab').forEach((b) => b.onclick = () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+    $('#tab-spotify').classList.toggle('hidden', b.dataset.tab !== 'spotify');
+    $('#tab-export').classList.toggle('hidden', b.dataset.tab !== 'export');
+  });
+  $('#restart').onclick = () => { history.replaceState(null, '', REDIRECT); location.reload(); };
+
+  // ===== PKCE =====
+  const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const rand = (n) => b64url(crypto.getRandomValues(new Uint8Array(n)));
+
+  $('#login').onclick = async () => {
+    const cid = $('#cid').value.trim();
+    if (!/^[0-9a-f]{32}$/i.test(cid)) return status('Client ID non valido: sono 32 caratteri esadecimali.');
+    const verifier = rand(64);
+    const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    const state = rand(16);
+    ss.set('kg_v', verifier); ss.set('kg_c', cid); ss.set('kg_s', state);
+    const q = new URLSearchParams({ client_id: cid, response_type: 'code', redirect_uri: REDIRECT, scope: SCOPES,
+      code_challenge_method: 'S256', code_challenge: challenge, state });
+    location.href = 'https://accounts.spotify.com/authorize?' + q;
+  };
+
+  async function handleCallback() {
+    const p = new URLSearchParams(location.search);
+    if (!p.has('code') && !p.has('error')) return;
+    const verifier = ss.get('kg_v'), cid = ss.get('kg_c'), state = ss.get('kg_s');
+    ss.del('kg_v'); ss.del('kg_c'); ss.del('kg_s');
+    history.replaceState(null, '', REDIRECT);
+    if (p.get('error')) return status('Login annullato: ' + p.get('error'));
+    if (!verifier || p.get('state') !== state) return status('Sessione di login scaduta. Riprova.');
+    status('Login…');
+    const r = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'authorization_code', code: p.get('code'), redirect_uri: REDIRECT, client_id: cid, code_verifier: verifier }),
+    });
+    const j = await r.json();
+    if (!r.ok) return status('Errore login: ' + (j.error_description || j.error || r.status));
+    token = j.access_token;
+    await runSpotify();
+  }
+
+  // ===== Spotify Web API =====
+  async function api(path, opts = {}) {
+    for (let i = 0; i < 6; i++) {
+      const r = await fetch('https://api.spotify.com/v1' + path, { ...opts,
+        headers: { Authorization: 'Bearer ' + token, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
+      if (r.status === 429) { await sleep((+r.headers.get('retry-after') || 2) * 1000 + 250); continue; }
+      if (r.status === 403) throw new Error('403: il tuo account non è tra gli utenti dell\'app (Dashboard → User Management) o manca Premium.');
+      if (!r.ok) throw new Error(r.status + ' ' + path);
+      const txt = await r.text();
+      return txt ? JSON.parse(txt) : null;
+    }
+    throw new Error('Troppe richieste (429). Riprova tra qualche minuto.');
+  }
+
+  async function runSpotify() {
+    try {
+      const seen = new Map();
+      const add = (t) => { if (t?.id && !seen.has(t.id)) seen.set(t.id, { name: t.name, artist: t.artists?.[0]?.name || '?', artistId: t.artists?.[0]?.id, uri: t.uri, all: t.artists?.map((a) => a.name).join(', ') }); };
+      status('Leggo i tuoi top tracks…');
+      for (const range of ['short_term', 'medium_term', 'long_term']) {
+        try { (await api(`/me/top/tracks?limit=50&time_range=${range}`)).items.forEach(add); } catch (e) { console.warn(e); }
+      }
+      status('Leggo i brani piaciuti…');
+      let url = '/me/tracks?limit=50', liked = 0;
+      while (url && liked < LIKED_MAX) {
+        const pg = await api(url); pg.items.forEach((i) => add(i.track)); liked += pg.items.length;
+        url = pg.next ? pg.next.replace('https://api.spotify.com/v1', '') : null;
+      }
+      tracks = [...seen.values()];
+      if (!tracks.length) return status('Nessun brano trovato.');
+
+      const ids = [...new Set(tracks.map((t) => t.artistId).filter(Boolean))];
+      const genres = new Map();
+      const missing = [];
+      for (let i = 0; i < ids.length; i++) {
+        status(`Generi artisti ${i + 1}/${ids.length}…`); progress((i + 1) / ids.length);
+        try { const a = await api('/artists/' + ids[i]); genres.set(a.name, a.genres || []); if (!a.genres?.length) missing.push(a.name); }
+        catch (e) { console.warn(e); }
+        await sleep(80);
+      }
+      if (missing.length) await fillFromMusicBrainz(missing, genres);
+      build(genres, true);
+    } catch (e) { status(e.message); }
+  }
+
+  // ===== Export Spotify + MusicBrainz =====
+  $('#files').onchange = async (ev) => {
+    try {
+      const counts = new Map();
+      for (const f of ev.target.files) {
+        const rows = JSON.parse(await f.text());
+        for (const r of rows) {
+          const name = r.trackName ?? r.master_metadata_track_name;
+          const artist = r.artistName ?? r.master_metadata_album_artist_name;
+          if (!name || !artist) continue;
+          const k = artist + '\u0000' + name;
+          const c = counts.get(k) || { name, artist, all: artist, uri: r.spotify_track_uri || null, ms: 0 };
+          c.ms += r.msPlayed ?? r.ms_played ?? 0;
+          counts.set(k, c);
+        }
+      }
+      tracks = [...counts.values()].sort((a, b) => b.ms - a.ms).slice(0, 600);
+      if (!tracks.length) return status('Nessun brano nei file. Servono i JSON della cronologia musicale.');
+      const byArtist = new Map();
+      tracks.forEach((t) => byArtist.set(t.artist, (byArtist.get(t.artist) || 0) + t.ms));
+      const artists = [...byArtist.entries()].sort((a, b) => b[1] - a[1]).slice(0, MB_MAX_ARTISTS).map((x) => x[0]);
+      const genres = new Map();
+      await fillFromMusicBrainz(artists, genres);
+      build(genres, false);
+    } catch (e) { status('File non leggibile: ' + e.message); }
+  };
+
+  async function fillFromMusicBrainz(names, genres) {
+    for (let i = 0; i < names.length; i++) {
+      status(`MusicBrainz ${i + 1}/${names.length} (1 richiesta al secondo)…`); progress((i + 1) / names.length);
+      try {
+        const q = encodeURIComponent(`artist:"${names[i].replace(/"/g, '')}"`);
+        const r = await fetch(`https://musicbrainz.org/ws/2/artist/?query=${q}&fmt=json&limit=1`);
+        if (r.ok) {
+          const a = (await r.json()).artists?.[0];
+          const tags = (a?.tags || []).sort((x, y) => y.count - x.count).map((t) => t.name.toLowerCase());
+          if (tags.length) genres.set(names[i], tags);
+        }
+      } catch (e) { console.warn(e); }
+      await sleep(1100);
+    }
+  }
+
+  // ===== Smistamento + UI risultati =====
+  const pick = (gs) => {
+    for (const [name, keys] of BUCKETS) if (gs.some((g) => keys.some((k) => g.includes(k)))) return name;
+    return FALLBACK;
+  };
+
+  let canCreate = false;
+  function build(genres, fromSpotify) {
+    canCreate = fromSpotify;
+    folders = new Map([...BUCKETS.map((b) => [b[0], []]), [FALLBACK, []]]);
+    tracks.forEach((t) => folders.get(pick(genres.get(t.artist) || [])).push(t));
+    progress(0); status('');
+    $('#start').classList.add('hidden');
+    $('#result').classList.remove('hidden');
+    render();
+  }
+
+  function render() {
+    const names = [...folders.keys()];
+    const list = [...folders.entries()].filter(([, l]) => l.length).sort((a, b) => b[1].length - a[1].length);
+    $('#summary').textContent = `${tracks.length} brani · ${list.length} cartelle`;
+    $('#folders').innerHTML = list.map(([name, l]) => `
+      <details class="f">
+        <summary><span>📁 <b>${esc(name)}</b> · ${l.length}</span>
+          ${canCreate ? `<button class="pri" style="padding:6px 14px;font-size:13px" data-mk="${esc(name)}">Crea playlist</button>` : ''}</summary>
+        <ul class="tracks">${l.map((t, i) => `<li><div>${esc(t.name)} <span>— ${esc(t.all)}</span></div>
+          <select data-f="${esc(name)}" data-i="${i}" title="Sposta">${names.map((n) => `<option${n === name ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></li>`).join('')}</ul>
+      </details>`).join('');
+  }
+
+  $('#folders').addEventListener('change', (e) => {
+    const s = e.target.closest('select'); if (!s) return;
+    const from = folders.get(s.dataset.f); const [t] = from.splice(+s.dataset.i, 1);
+    folders.get(s.value).push(t); render();
+  });
+
+  $('#folders').addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-mk]'); if (!b) return;
+    e.preventDefault();
+    const name = b.dataset.mk; const uris = folders.get(name).map((t) => t.uri).filter(Boolean);
+    b.disabled = true; b.textContent = '…';
+    try {
+      const pl = await api('/me/playlists', { method: 'POST', body: JSON.stringify({ name, public: false }) });
+      for (let i = 0; i < uris.length; i += 100) {
+        await api(`/playlists/${pl.id}/items`, { method: 'POST', body: JSON.stringify({ uris: uris.slice(i, i + 100) }) });
+      }
+      b.textContent = '✓ Creata';
+    } catch (err) { b.textContent = 'Errore'; status(err.message); }
+  });
+
+  handleCallback().catch((e) => status(e.message));
+})();
+</script>
+</body>
+</html>
