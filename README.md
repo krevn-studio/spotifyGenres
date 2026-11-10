@@ -1,6 +1,6 @@
 # Krevn Genres
 
-Strumento open source di [Krevn Studio](https://github.com/xAspired): analizza i tuoi brani Spotify e li divide in cartelle per genere.
+Strumento open source di [Krevn Studio](https://github.com/krevn-studio): analizza i tuoi brani Spotify e li divide in cartelle per genere.
 
 - Gira tutto nel browser: nessun server, nessun database.
 - Non salva niente. Chiudi la pagina e sparisce tutto.
