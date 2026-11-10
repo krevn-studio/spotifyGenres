@@ -1,4 +1,4 @@
-# Krevn Genres
+# Vibely for Spotify
 
 Strumento open source di [Krevn Studio](https://github.com/krevn-studio): prende i tuoi brani Spotify preferiti, **ascolta un'anteprima di ognuno** e li divide in cartelle per **mood**.
 
