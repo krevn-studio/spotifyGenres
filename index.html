@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Krevn Genres — i tuoi brani Spotify divisi per genere</title>
-<meta name="description" content="Strumento open source di Krevn Studio: analizza i tuoi brani Spotify e li divide in cartelle per genere. Nessun server, nessun dato salvato.">
+<title>Krevn Genres — i tuoi brani Spotify divisi per mood</title>
+<meta name="description" content="Strumento open source di Krevn Studio: analizza i tuoi brani Spotify e li divide in cartelle per mood ascoltando l'audio. Nessun server, nessun dato salvato.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0b0b0d;--card:#141418;--line:#26262c;--fg:#eee;--mut:#9a9aa3;--acc:#1ed760}
@@ -40,6 +40,12 @@ details.f summary::-webkit-details-marker{display:none}
 .tracks select{background:#0e0e11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px;font-size:12px;max-width:140px}
 .note{color:var(--mut);font-size:14px;border-left:2px solid var(--line);padding-left:14px;margin-top:24px}
 .hidden{display:none}
+.moods{display:flex;gap:6px;margin-top:2px}
+.moods i{display:inline-block;width:28px;height:4px;border-radius:2px;background:var(--line);position:relative;overflow:hidden}
+.moods i b{position:absolute;inset:0 auto 0 0;background:var(--acc)}
+.opts{display:flex;align-items:center;gap:10px;margin:14px 0 0;color:var(--mut);font-size:14px}
+.opts select{background:#0e0e11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px}
+.fdesc{color:var(--mut);font-size:13px;margin:6px 0 0}
 footer{margin-top:48px;color:var(--mut);font-size:13px}
 a{color:var(--acc)}
 </style>
@@ -47,8 +53,8 @@ a{color:var(--acc)}
 <body>
 <main>
   <div class="brand">Krevn Studio · open source</div>
-  <h1>I tuoi brani,<br><span>divisi per genere.</span></h1>
-  <p class="lead">Analizza i tuoi brani preferiti e li raggruppa in cartelle per genere. Tutto gira nel tuo browser: nessun server, nessun dato salvato. Chiudi la pagina e sparisce tutto.</p>
+  <h1>I tuoi brani,<br><span>divisi per mood.</span></h1>
+  <p class="lead">Ascolta un'anteprima di ogni brano, ne capisce l'atmosfera (malinconica, calma, carica, aggressiva…) e raggruppa i brani in cartelle per mood. Tutto gira nel tuo browser: nessun server, nessun dato salvato.</p>
 
   <section id="start">
     <div class="tabs">
@@ -71,12 +77,22 @@ a{color:var(--acc)}
 
     <div class="card hidden" id="tab-export">
       <h2>Carica i tuoi dati Spotify</h2>
-      <p class="lead" style="font-size:15px;margin:0">Funziona anche senza Premium. I generi arrivano da MusicBrainz.</p>
+      <p class="lead" style="font-size:15px;margin:0">Funziona anche senza Premium.</p>
       <ol class="steps">
         <li>Vai su <a href="https://www.spotify.com/account/privacy/" target="_blank" rel="noopener">spotify.com/account/privacy</a> e richiedi i tuoi dati (cronologia di ascolto). Spotify li invia via email, di solito in pochi giorni.</li>
         <li>Estrai lo zip e seleziona i file <code>StreamingHistory_music_*.json</code> o <code>Streaming_History_Audio_*.json</code>.</li>
       </ol>
       <input type="file" id="files" accept=".json,application/json" multiple>
+    </div>
+
+    <div class="opts">
+      <label for="limit">Brani da analizzare</label>
+      <select id="limit">
+        <option value="50">50 · veloce</option>
+        <option value="150" selected>150</option>
+        <option value="300">300</option>
+        <option value="600">600 · lento</option>
+      </select>
     </div>
     <div class="status" id="status"></div>
     <div class="bar"><i id="prog"></i></div>
@@ -90,28 +106,27 @@ a{color:var(--acc)}
     <div id="folders"></div>
   </section>
 
-  <p class="note">Codice aperto: leggilo prima di usarlo. Il Client ID e i token restano in memoria solo durante la sessione. Il Client ID passa da <code>sessionStorage</code> per il tempo del redirect di login e viene cancellato subito dopo.</p>
-  <footer>Fatto da Krevn Studio · <a href="https://github.com/krevn-studio/spotifyGenres">GitHub</a> · <a href="https://buymeacoffee.com/xaspired">Offrimi un caffè</a></footer>
+  <p class="note">Come funziona: per ogni brano scarica l'anteprima di 30 secondi da iTunes e la analizza con i modelli di mood di <a href="https://essentia.upf.edu" target="_blank" rel="noopener">Essentia</a> (Music Technology Group, Universitat Pompeu Fabra). La prima volta scarica circa 20 MB di modelli, poi restano in cache. Il Client ID e i token restano solo in memoria; il Client ID passa da <code>sessionStorage</code> per il tempo del redirect di login e viene cancellato subito dopo.</p>
+  <footer>Fatto da Krevn Studio · <a href="https://github.com/krevn-studio/spotifyGenres">GitHub</a> · <a href="https://buymeacoffee.com/xaspired">Offrimi un caffè</a><br>Essentia.js © MTG-UPF, AGPL-3.0 · Modelli © MTG-UPF, CC BY-NC-ND 4.0 · Uso non commerciale.</footer>
 </main>
 
 <script>
 (() => {
-  // ===== Macro-cartelle: keyword cercate nei generi (Spotify o MusicBrainz). Vince la prima che corrisponde. =====
-  const BUCKETS = [
-    ['Rap & Emo', ['hip hop', 'hip-hop', 'rap', 'trap', 'drill', 'grime', 'emo', 'alt z', 'alternative pop', 'dark pop']],
-    ['Rock & Metal', ['rock', 'metal', 'punk', 'grunge', 'hardcore', 'post-hardcore']],
-    ['Indie & Alt', ['indie', 'alternative', 'shoegaze', 'bedroom', 'dream']],
-    ['Pop', ['pop']],
-    ['Elettronica', ['edm', 'house', 'techno', 'electro', 'dubstep', 'drum and bass', 'trance', 'synth', 'phonk', 'electronic']],
-    ['R&B & Soul', ['r&b', 'rnb', 'soul', 'funk']],
-    ['Italiana', ['italian', 'cantautor']],
-    ['Latin', ['reggaeton', 'latin', 'urbano']],
-    ['Chill & Classica', ['ambient', 'classical', 'piano', 'soundtrack', 'jazz', 'lofi', 'lo-fi']],
+  // ===== Cartelle mood. Profilo in punteggi z (relativi alla tua libreria): happy, sad, relaxed, aggressive, danceability =====
+  const MOODS = [
+    { name: 'Lonely', desc: 'Malinconiche, introspettive, da cuffie e finestrino.', p: { happy: -1.0, sad: 1.2, relaxed: 0.6, aggressive: -0.6, danceability: -0.8 } },
+    { name: 'Golden hour', desc: 'Calde, sognanti, emotive ma luminose.', p: { happy: 0.4, sad: 0.1, relaxed: 0.9, aggressive: -0.7, danceability: -0.1 } },
+    { name: 'Feel good', desc: 'Positive e leggere, mettono di buon umore.', p: { happy: 1.1, sad: -0.8, relaxed: -0.2, aggressive: -0.3, danceability: 0.6 } },
+    { name: 'Party', desc: 'Ritmo alto, da ballare.', p: { happy: 0.5, sad: -0.7, relaxed: -0.8, aggressive: 0.3, danceability: 1.2 } },
+    { name: 'Dark', desc: 'Cupe e tese, malinconia con grinta.', p: { happy: -0.9, sad: 0.6, relaxed: -0.5, aggressive: 0.6, danceability: 0.2 } },
+    { name: 'Sfogo', desc: 'Aggressive, per scaricare la tensione.', p: { happy: -0.4, sad: -0.2, relaxed: -1.0, aggressive: 1.3, danceability: 0.3 } },
   ];
-  const FALLBACK = 'Altro';
+  const NO_PREVIEW = 'Senza anteprima';
+  const KEYS = ['happy', 'sad', 'relaxed', 'aggressive', 'danceability'];
   const SCOPES = 'user-top-read user-library-read playlist-modify-private';
-  const LIKED_MAX = 500;
-  const MB_MAX_ARTISTS = 200;
+  const PATCH = 187 * 256;      // campioni per patch MusiCNN (16 kHz, ~3 s)
+  const PATCHES = 3;            // patch analizzate per brano
+  const FETCH_CONCURRENCY = 3;
 
   const $ = (s) => document.querySelector(s);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -119,13 +134,14 @@ a{color:var(--acc)}
   const REDIRECT = location.origin + location.pathname;
   const status = (t) => { $('#status').textContent = t; };
   const progress = (p) => { $('#prog').style.width = Math.round(p * 100) + '%'; };
-
-  let token = null;
-  let tracks = [];      // {name, artist, artistId?, uri?}
-  let folders = new Map();
   const ss = { get(k) { try { return sessionStorage.getItem(k); } catch { return null; } },
                set(k, v) { try { sessionStorage.setItem(k, v); } catch {} },
                del(k) { try { sessionStorage.removeItem(k); } catch {} } };
+
+  let token = null;
+  let tracks = [];        // {name, artist, all, uri?, scores?}
+  let folders = new Map();
+  let canCreate = false;
 
   // ===== UI base =====
   $('#redir').textContent = REDIRECT;
@@ -136,6 +152,7 @@ a{color:var(--acc)}
     $('#tab-export').classList.toggle('hidden', b.dataset.tab !== 'export');
   });
   $('#restart').onclick = () => { history.replaceState(null, '', REDIRECT); location.reload(); };
+  const limit = () => +$('#limit').value;
 
   // ===== PKCE =====
   const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -147,7 +164,7 @@ a{color:var(--acc)}
     const verifier = rand(64);
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const state = rand(16);
-    ss.set('kg_v', verifier); ss.set('kg_c', cid); ss.set('kg_s', state);
+    ss.set('kg_v', verifier); ss.set('kg_c', cid); ss.set('kg_s', state); ss.set('kg_l', String(limit()));
     const q = new URLSearchParams({ client_id: cid, response_type: 'code', redirect_uri: REDIRECT, scope: SCOPES,
       code_challenge_method: 'S256', code_challenge: challenge, state });
     location.href = 'https://accounts.spotify.com/authorize?' + q;
@@ -156,8 +173,9 @@ a{color:var(--acc)}
   async function handleCallback() {
     const p = new URLSearchParams(location.search);
     if (!p.has('code') && !p.has('error')) return;
-    const verifier = ss.get('kg_v'), cid = ss.get('kg_c'), state = ss.get('kg_s');
-    ss.del('kg_v'); ss.del('kg_c'); ss.del('kg_s');
+    const verifier = ss.get('kg_v'), cid = ss.get('kg_c'), state = ss.get('kg_s'), lim = ss.get('kg_l');
+    ['kg_v', 'kg_c', 'kg_s', 'kg_l'].forEach(ss.del);
+    if (lim) $('#limit').value = lim;
     history.replaceState(null, '', REDIRECT);
     if (p.get('error')) return status('Login annullato: ' + p.get('error'));
     if (!verifier || p.get('state') !== state) return status('Sessione di login scaduta. Riprova.');
@@ -189,35 +207,25 @@ a{color:var(--acc)}
   async function runSpotify() {
     try {
       const seen = new Map();
-      const add = (t) => { if (t?.id && !seen.has(t.id)) seen.set(t.id, { name: t.name, artist: t.artists?.[0]?.name || '?', artistId: t.artists?.[0]?.id, uri: t.uri, all: t.artists?.map((a) => a.name).join(', ') }); };
+      const add = (t) => { if (t?.id && !seen.has(t.id)) seen.set(t.id, { name: t.name, artist: t.artists?.[0]?.name || '', all: t.artists?.map((a) => a.name).join(', '), uri: t.uri }); };
       status('Leggo i tuoi top tracks…');
       for (const range of ['short_term', 'medium_term', 'long_term']) {
         try { (await api(`/me/top/tracks?limit=50&time_range=${range}`)).items.forEach(add); } catch (e) { console.warn(e); }
       }
       status('Leggo i brani piaciuti…');
-      let url = '/me/tracks?limit=50', liked = 0;
-      while (url && liked < LIKED_MAX) {
-        const pg = await api(url); pg.items.forEach((i) => add(i.track)); liked += pg.items.length;
+      let url = '/me/tracks?limit=50';
+      while (url && seen.size < limit()) {
+        const pg = await api(url); pg.items.forEach((i) => add(i.track));
         url = pg.next ? pg.next.replace('https://api.spotify.com/v1', '') : null;
       }
-      tracks = [...seen.values()];
+      tracks = [...seen.values()].slice(0, limit());
       if (!tracks.length) return status('Nessun brano trovato.');
-
-      const ids = [...new Set(tracks.map((t) => t.artistId).filter(Boolean))];
-      const genres = new Map();
-      const missing = [];
-      for (let i = 0; i < ids.length; i++) {
-        status(`Generi artisti ${i + 1}/${ids.length}…`); progress((i + 1) / ids.length);
-        try { const a = await api('/artists/' + ids[i]); genres.set(a.name, a.genres || []); if (!a.genres?.length) missing.push(a.name); }
-        catch (e) { console.warn(e); }
-        await sleep(80);
-      }
-      if (missing.length) await fillFromMusicBrainz(missing, genres);
-      build(genres, true);
+      canCreate = true;
+      await analyzeAll();
     } catch (e) { status(e.message); }
   }
 
-  // ===== Export Spotify + MusicBrainz =====
+  // ===== Export Spotify =====
   $('#files').onchange = async (ev) => {
     try {
       const counts = new Map();
@@ -233,59 +241,150 @@ a{color:var(--acc)}
           counts.set(k, c);
         }
       }
-      tracks = [...counts.values()].sort((a, b) => b.ms - a.ms).slice(0, 600);
+      tracks = [...counts.values()].sort((a, b) => b.ms - a.ms).slice(0, limit());
       if (!tracks.length) return status('Nessun brano nei file. Servono i JSON della cronologia musicale.');
-      const byArtist = new Map();
-      tracks.forEach((t) => byArtist.set(t.artist, (byArtist.get(t.artist) || 0) + t.ms));
-      const artists = [...byArtist.entries()].sort((a, b) => b[1] - a[1]).slice(0, MB_MAX_ARTISTS).map((x) => x[0]);
-      const genres = new Map();
-      await fillFromMusicBrainz(artists, genres);
-      build(genres, false);
+      canCreate = false;
+      await analyzeAll();
     } catch (e) { status('File non leggibile: ' + e.message); }
   };
 
-  async function fillFromMusicBrainz(names, genres) {
-    for (let i = 0; i < names.length; i++) {
-      status(`MusicBrainz ${i + 1}/${names.length} (1 richiesta al secondo)…`); progress((i + 1) / names.length);
-      try {
-        const q = encodeURIComponent(`artist:"${names[i].replace(/"/g, '')}"`);
-        const r = await fetch(`https://musicbrainz.org/ws/2/artist/?query=${q}&fmt=json&limit=1`);
-        if (r.ok) {
-          const a = (await r.json()).artists?.[0];
-          const tags = (a?.tags || []).sort((x, y) => y.count - x.count).map((t) => t.name.toLowerCase());
-          if (tags.length) genres.set(names[i], tags);
-        }
-      } catch (e) { console.warn(e); }
-      await sleep(1100);
+  // ===== Worker Essentia =====
+  let worker = null, workerReady = null;
+  const pending = new Map();
+  function startWorker() {
+    if (workerReady) return workerReady;
+    workerReady = new Promise((resolve, reject) => {
+      worker = new Worker('lib/mood-worker.js');
+      worker.onmessage = (ev) => {
+        const d = ev.data;
+        if (d.type === 'loading') status(`Carico i modelli di mood ${d.done}/${d.total}…`);
+        else if (d.type === 'ready') { console.info('Backend tfjs:', d.backend); resolve(); }
+        else if (d.type === 'error') reject(new Error(d.error));
+        else if (d.type === 'result') { const p = pending.get(d.id); pending.delete(d.id); p && p(d); }
+      };
+      worker.onerror = (e) => reject(new Error(e.message || 'Errore nel worker'));
+      worker.postMessage({ type: 'init' });
+    });
+    return workerReady;
+  }
+  let nextId = 0;
+  const classify = (audio) => new Promise((resolve) => {
+    const id = ++nextId; pending.set(id, resolve);
+    worker.postMessage({ type: 'analyze', id, audio: audio.buffer }, [audio.buffer]);
+  });
+
+  // ===== Anteprima iTunes + decodifica a 16 kHz mono =====
+  const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\(.*?\)|\[.*?\]|- .*$/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  async function itunesPreview(t) {
+    const term = `${t.artist} ${t.name.replace(/\(.*?\)|\[.*?\]| - .*$/g, '')}`.slice(0, 120);
+    for (let i = 0; i < 4; i++) {
+      let r;
+      try { r = await fetch('https://itunes.apple.com/search?' + new URLSearchParams({ term, entity: 'song', limit: 5 })); }
+      catch { await sleep(1500); continue; }
+      if (r.status === 403 || r.status === 429) { await sleep(4000 * (i + 1)); continue; }
+      if (!r.ok) return null;
+      const res = (await r.json()).results || [];
+      const a = norm(t.artist), n = norm(t.name);
+      const hit = res.find((x) => norm(x.artistName).includes(a) && norm(x.trackName).includes(n))
+        || res.find((x) => norm(x.artistName).includes(a) || a.includes(norm(x.artistName)))
+        || null;
+      return hit?.previewUrl || null;
     }
+    return null;
   }
 
-  // ===== Smistamento + UI risultati =====
-  const pick = (gs) => {
-    for (const [name, keys] of BUCKETS) if (gs.some((g) => keys.some((k) => g.includes(k)))) return name;
-    return FALLBACK;
-  };
+  async function loadAudio(url) {
+    const buf = await (await fetch(url)).arrayBuffer();
+    const ctx = new OfflineAudioContext(1, 16000, 16000);
+    const ab = await ctx.decodeAudioData(buf);
+    let mono = ab.getChannelData(0);
+    if (ab.numberOfChannels > 1) {
+      const r = ab.getChannelData(1); const m = new Float32Array(mono.length);
+      for (let i = 0; i < m.length; i++) m[i] = 0.5 * (mono[i] + r[i]);
+      mono = m;
+    }
+    // salta il 10% iniziale/finale e prende PATCHES patch distribuite
+    const start = Math.floor(mono.length * 0.1), end = Math.floor(mono.length * 0.9);
+    const span = end - start;
+    if (span < PATCH) return mono.slice(0, Math.max(mono.length, PATCH));
+    const out = new Float32Array(PATCH * PATCHES);
+    const step = PATCHES > 1 ? Math.floor((span - PATCH) / (PATCHES - 1)) : 0;
+    for (let k = 0; k < PATCHES; k++) out.set(mono.subarray(start + k * step, start + k * step + PATCH), k * PATCH);
+    return out;
+  }
 
-  let canCreate = false;
-  function build(genres, fromSpotify) {
-    canCreate = fromSpotify;
-    folders = new Map([...BUCKETS.map((b) => [b[0], []]), [FALLBACK, []]]);
-    tracks.forEach((t) => folders.get(pick(genres.get(t.artist) || [])).push(t));
+  async function analyzeAll() {
+    try {
+      status('Carico i modelli di mood (solo la prima volta ~20 MB)…');
+      await startWorker();
+      let done = 0;
+      const t0 = Date.now();
+      const tick = () => {
+        done++; progress(done / tracks.length);
+        const eta = Math.round((Date.now() - t0) / done * (tracks.length - done) / 1000);
+        status(`Ascolto i brani ${done}/${tracks.length}… circa ${eta >= 60 ? Math.round(eta / 60) + ' min' : eta + ' s'} rimanenti`);
+      };
+      let idx = 0;
+      const job = async () => {
+        while (idx < tracks.length) {
+          const t = tracks[idx++];
+          try {
+            const url = await itunesPreview(t);
+            if (url) {
+              const audio = await loadAudio(url);
+              const r = await classify(audio);
+              if (!r.error) t.scores = r.scores; else console.warn(t.name, r.error);
+            }
+          } catch (e) { console.warn(t.name, e); }
+          tick();
+        }
+      };
+      await Promise.all(Array.from({ length: FETCH_CONCURRENCY }, job));
+      build();
+    } catch (e) { status('Errore analisi: ' + e.message); }
+  }
+
+  // ===== Smistamento per mood =====
+  function build() {
+    const scored = tracks.filter((t) => t.scores);
+    const stat = {};
+    for (const k of KEYS) {
+      const v = scored.map((t) => t.scores[k]);
+      const mean = v.reduce((a, b) => a + b, 0) / (v.length || 1);
+      const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / (v.length || 1)) || 0.15;
+      // con pochi brani la normalizzazione non è affidabile: uso valori assoluti centrati su 0.5
+      stat[k] = scored.length >= 12 ? { mean, sd } : { mean: 0.5, sd: 0.2 };
+    }
+    folders = new Map([...MOODS.map((m) => [m.name, []]), [NO_PREVIEW, []]]);
+    for (const t of tracks) {
+      if (!t.scores) { folders.get(NO_PREVIEW).push(t); continue; }
+      const z = Object.fromEntries(KEYS.map((k) => [k, (t.scores[k] - stat[k].mean) / stat[k].sd]));
+      let best = null, bestD = Infinity;
+      for (const m of MOODS) {
+        let d = 0; for (const k of KEYS) d += (z[k] - m.p[k]) ** 2;
+        if (d < bestD) { bestD = d; best = m.name; }
+      }
+      folders.get(best).push(t);
+    }
     progress(0); status('');
     $('#start').classList.add('hidden');
     $('#result').classList.remove('hidden');
     render();
   }
 
+  const bars = (s) => s ? `<div class="moods" title="felice · triste · calma · aggressiva · ballabile">${KEYS.map((k) => `<i><b style="width:${Math.round(s[k] * 100)}%"></b></i>`).join('')}</div>` : '';
+
   function render() {
     const names = [...folders.keys()];
-    const list = [...folders.entries()].filter(([, l]) => l.length).sort((a, b) => b[1].length - a[1].length);
-    $('#summary').textContent = `${tracks.length} brani · ${list.length} cartelle`;
+    const list = [...folders.entries()].filter(([, l]) => l.length);
+    const desc = Object.fromEntries(MOODS.map((m) => [m.name, m.desc]));
+    $('#summary').textContent = `${tracks.length} brani · ${list.filter(([n]) => n !== NO_PREVIEW).length} mood`;
     $('#folders').innerHTML = list.map(([name, l]) => `
       <details class="f">
         <summary><span>📁 <b>${esc(name)}</b> · ${l.length}</span>
-          ${canCreate ? `<button class="pri" style="padding:6px 14px;font-size:13px" data-mk="${esc(name)}">Crea playlist</button>` : ''}</summary>
-        <ul class="tracks">${l.map((t, i) => `<li><div>${esc(t.name)} <span>— ${esc(t.all)}</span></div>
+          ${canCreate && name !== NO_PREVIEW ? `<button class="pri" style="padding:6px 14px;font-size:13px" data-mk="${esc(name)}">Crea playlist</button>` : ''}</summary>
+        ${desc[name] ? `<p class="fdesc">${esc(desc[name])}</p>` : ''}
+        <ul class="tracks">${l.map((t, i) => `<li><div>${esc(t.name)} <span>— ${esc(t.all)}</span>${bars(t.scores)}</div>
           <select data-f="${esc(name)}" data-i="${i}" title="Sposta">${names.map((n) => `<option${n === name ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></li>`).join('')}</ul>
       </details>`).join('');
   }
