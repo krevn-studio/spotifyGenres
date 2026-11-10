@@ -43,8 +43,6 @@ details.f summary::-webkit-details-marker{display:none}
 .moods{display:flex;gap:6px;margin-top:2px}
 .moods i{display:inline-block;width:28px;height:4px;border-radius:2px;background:var(--line);position:relative;overflow:hidden}
 .moods i b{position:absolute;inset:0 auto 0 0;background:var(--acc)}
-.opts{display:flex;align-items:center;gap:10px;margin:14px 0 0;color:var(--mut);font-size:14px}
-.opts select{background:#0e0e11;color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px}
 .fdesc{color:var(--mut);font-size:13px;margin:6px 0 0}
 footer{margin-top:48px;color:var(--mut);font-size:13px}
 a{color:var(--acc)}
@@ -54,7 +52,7 @@ a{color:var(--acc)}
 <main>
   <div class="brand">Krevn Studio · open source</div>
   <h1>I tuoi brani,<br><span>divisi per mood.</span></h1>
-  <p class="lead">Ascolta un'anteprima di ogni brano, ne capisce l'atmosfera (malinconica, calma, carica, aggressiva…) e raggruppa i brani in cartelle per mood. Tutto gira nel tuo browser: nessun server, nessun dato salvato.</p>
+  <p class="lead">Ascolta un'anteprima di ogni brano tra i tuoi preferiti, ne capisce l'atmosfera (malinconica, calma, carica, aggressiva…) e raggruppa i brani in cartelle per mood. Tutto gira nel tuo browser: nessun server, nessun dato salvato.</p>
 
   <section id="start">
     <div class="tabs">
@@ -85,15 +83,6 @@ a{color:var(--acc)}
       <input type="file" id="files" accept=".json,application/json" multiple>
     </div>
 
-    <div class="opts">
-      <label for="limit">Brani da analizzare</label>
-      <select id="limit">
-        <option value="50">50 · veloce</option>
-        <option value="150" selected>150</option>
-        <option value="300">300</option>
-        <option value="600">600 · lento</option>
-      </select>
-    </div>
     <div class="status" id="status"></div>
     <div class="bar"><i id="prog"></i></div>
   </section>
@@ -123,12 +112,13 @@ a{color:var(--acc)}
   ];
   const NO_PREVIEW = 'Senza anteprima';
   const KEYS = ['happy', 'sad', 'relaxed', 'aggressive', 'danceability'];
-  const SCOPES = 'user-top-read user-library-read playlist-modify-private';
+  const SCOPES = 'user-library-read playlist-modify-private';
   const PATCH = 187 * 256;      // campioni per patch MusiCNN (16 kHz, ~3 s)
   const PATCHES = 2;            // patch analizzate per brano (~6 s di audio)
   const FETCH_CONCURRENCY = 3;
 
   const $ = (s) => document.querySelector(s);
+  const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\(.*?\)|\[.*?\]|- .*$/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const REDIRECT = location.origin + location.pathname;
@@ -152,7 +142,6 @@ a{color:var(--acc)}
     $('#tab-export').classList.toggle('hidden', b.dataset.tab !== 'export');
   });
   $('#restart').onclick = () => { history.replaceState(null, '', REDIRECT); location.reload(); };
-  const limit = () => +$('#limit').value;
 
   // ===== PKCE =====
   const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -164,7 +153,7 @@ a{color:var(--acc)}
     const verifier = rand(64);
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const state = rand(16);
-    ss.set('kg_v', verifier); ss.set('kg_c', cid); ss.set('kg_s', state); ss.set('kg_l', String(limit()));
+    ss.set('kg_v', verifier); ss.set('kg_c', cid); ss.set('kg_s', state);
     const q = new URLSearchParams({ client_id: cid, response_type: 'code', redirect_uri: REDIRECT, scope: SCOPES,
       code_challenge_method: 'S256', code_challenge: challenge, state });
     location.href = 'https://accounts.spotify.com/authorize?' + q;
@@ -173,9 +162,8 @@ a{color:var(--acc)}
   async function handleCallback() {
     const p = new URLSearchParams(location.search);
     if (!p.has('code') && !p.has('error')) return;
-    const verifier = ss.get('kg_v'), cid = ss.get('kg_c'), state = ss.get('kg_s'), lim = ss.get('kg_l');
-    ['kg_v', 'kg_c', 'kg_s', 'kg_l'].forEach(ss.del);
-    if (lim) $('#limit').value = lim;
+    const verifier = ss.get('kg_v'), cid = ss.get('kg_c'), state = ss.get('kg_s');
+    ['kg_v', 'kg_c', 'kg_s'].forEach(ss.del);
     history.replaceState(null, '', REDIRECT);
     if (p.get('error')) return status('Login annullato: ' + p.get('error'));
     if (!verifier || p.get('state') !== state) return status('Sessione di login scaduta. Riprova.');
@@ -207,19 +195,18 @@ a{color:var(--acc)}
   async function runSpotify() {
     try {
       const seen = new Map();
-      const add = (t) => { if (t?.id && !seen.has(t.id)) seen.set(t.id, { name: t.name, artist: t.artists?.[0]?.name || '', all: t.artists?.map((a) => a.name).join(', '), uri: t.uri }); };
-      status('Leggo i tuoi top tracks…');
-      for (const range of ['short_term', 'medium_term', 'long_term']) {
-        try { (await api(`/me/top/tracks?limit=50&time_range=${range}`)).items.forEach(add); } catch (e) { console.warn(e); }
-      }
-      status('Leggo i brani piaciuti…');
-      let url = '/me/tracks?limit=50';
-      while (url && seen.size < limit()) {
-        const pg = await api(url); pg.items.forEach((i) => add(i.track));
+      // dedup per titolo+artista (stesso brano su album/singolo diversi)
+      const key = (t) => norm(t.artists?.[0]?.name || '') + '|' + norm(t.name);
+      const add = (t) => { if (t?.id && !seen.has(key(t))) seen.set(key(t), { name: t.name, artist: t.artists?.[0]?.name || '', all: t.artists?.map((a) => a.name).join(', '), uri: t.uri }); };
+      let url = '/me/tracks?limit=50', total = 0;
+      while (url) {
+        const pg = await api(url); total = pg.total || total;
+        pg.items.forEach((i) => add(i.track));
+        status(`Leggo i brani piaciuti… ${seen.size}${total ? '/' + total : ''}`);
         url = pg.next ? pg.next.replace('https://api.spotify.com/v1', '') : null;
       }
-      tracks = [...seen.values()].slice(0, limit());
-      if (!tracks.length) return status('Nessun brano trovato.');
+      tracks = [...seen.values()];
+      if (!tracks.length) return status('Nessun brano piaciuto trovato.');
       canCreate = true;
       await analyzeAll();
     } catch (e) { status(e.message); }
@@ -235,13 +222,13 @@ a{color:var(--acc)}
           const name = r.trackName ?? r.master_metadata_track_name;
           const artist = r.artistName ?? r.master_metadata_album_artist_name;
           if (!name || !artist) continue;
-          const k = artist + '\u0000' + name;
+          const k = norm(artist) + '|' + norm(name);
           const c = counts.get(k) || { name, artist, all: artist, uri: r.spotify_track_uri || null, ms: 0 };
           c.ms += r.msPlayed ?? r.ms_played ?? 0;
           counts.set(k, c);
         }
       }
-      tracks = [...counts.values()].sort((a, b) => b.ms - a.ms).slice(0, limit());
+      tracks = [...counts.values()].sort((a, b) => b.ms - a.ms);
       if (!tracks.length) return status('Nessun brano nei file. Servono i JSON della cronologia musicale.');
       canCreate = false;
       await analyzeAll();
@@ -274,7 +261,6 @@ a{color:var(--acc)}
   });
 
   // ===== Anteprima iTunes + decodifica a 16 kHz mono =====
-  const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\(.*?\)|\[.*?\]|- .*$/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   async function itunesPreview(t) {
     const term = `${t.artist} ${t.name.replace(/\(.*?\)|\[.*?\]| - .*$/g, '')}`.slice(0, 120);
     for (let i = 0; i < 4; i++) {
