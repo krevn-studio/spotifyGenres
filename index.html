@@ -92,6 +92,7 @@ a{color:var(--acc)}
       <h2 id="summary" style="margin:0"></h2>
       <button class="sec" id="restart">Ricomincia</button>
     </div>
+    <p class="status" id="rstatus" style="color:#ff8a80"></p>
     <div id="folders"></div>
   </section>
 
@@ -112,7 +113,7 @@ a{color:var(--acc)}
   ];
   const NO_PREVIEW = 'Senza anteprima';
   const KEYS = ['happy', 'sad', 'relaxed', 'aggressive', 'danceability'];
-  const SCOPES = 'user-library-read playlist-modify-private';
+  const SCOPES = 'user-library-read playlist-modify-private playlist-modify-public';
   const PATCH = 187 * 256;      // campioni per patch MusiCNN (16 kHz, ~3 s)
   const PATCHES = 2;            // patch analizzate per brano (~6 s di audio)
   const FETCH_CONCURRENCY = 3;
@@ -184,8 +185,11 @@ a{color:var(--acc)}
       const r = await fetch('https://api.spotify.com/v1' + path, { ...opts,
         headers: { Authorization: 'Bearer ' + token, ...(opts.body ? { 'Content-Type': 'application/json' } : {}) } });
       if (r.status === 429) { await sleep((+r.headers.get('retry-after') || 2) * 1000 + 250); continue; }
-      if (r.status === 403) throw new Error('403: il tuo account non è tra gli utenti dell\'app (Dashboard → User Management) o manca Premium.');
-      if (!r.ok) throw new Error(r.status + ' ' + path);
+      if (!r.ok) {
+        let msg = '';
+        try { msg = (await r.json()).error?.message || ''; } catch {}
+        throw new Error(`${r.status} ${opts.method || 'GET'} ${path.split('?')[0]}${msg ? ': ' + msg : ''}`);
+      }
       const txt = await r.text();
       return txt ? JSON.parse(txt) : null;
     }
@@ -392,7 +396,7 @@ a{color:var(--acc)}
         await api(`/playlists/${pl.id}/items`, { method: 'POST', body: JSON.stringify({ uris: uris.slice(i, i + 100) }) });
       }
       b.textContent = '✓ Creata';
-    } catch (err) { b.textContent = 'Errore'; status(err.message); }
+    } catch (err) { b.textContent = 'Errore'; b.disabled = false; $('#rstatus').textContent = name + ': ' + err.message; console.error(err); }
   });
 
   handleCallback().catch((e) => status(e.message));
