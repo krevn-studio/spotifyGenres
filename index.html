@@ -122,7 +122,7 @@ a{color:var(--acc)}
   const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\(.*?\)|\[.*?\]|- .*$/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const REDIRECT = location.origin + location.pathname;
+  const REDIRECT = location.origin + location.pathname.replace(/index\.html$/, '');
   const status = (t) => { $('#status').textContent = t; };
   const progress = (p) => { $('#prog').style.width = Math.round(p * 100) + '%'; };
   const ss = { get(k) { try { return sessionStorage.getItem(k); } catch { return null; } },
